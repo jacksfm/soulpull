@@ -12,23 +12,17 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, path::PathBuf, time::Duration};
 
 use crate::config::Config;
-use crate::sources::Track;
-use crate::slsk::runner::{run_all, run_raw, RunnerTask, search_term};
+use crate::slsk::runner::{run_all, RunnerTask};
 use app::{App, ActiveView};
 
-pub async fn run(
-    config: Config,
-    config_path: PathBuf,
-    tracks: Vec<Track>,
-    raw_input: Option<String>,
-) -> Result<()> {
+pub async fn run(config: Config, config_path: PathBuf, initial_inputs: Vec<String>) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let result = run_app(&mut terminal, config, config_path, tracks, raw_input).await;
+    let result = run_app(&mut terminal, config, config_path, initial_inputs).await;
 
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
@@ -41,10 +35,14 @@ async fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     config: Config,
     config_path: PathBuf,
-    tracks: Vec<Track>,
-    raw_input: Option<String>,
+    initial_inputs: Vec<String>,
 ) -> Result<()> {
-    let mut app = App::new(config, config_path, tracks, raw_input);
+    let mut app = App::new(config, config_path);
+
+    // Pre-load any inputs passed on the command line
+    for input in initial_inputs {
+        app.add_input(input);
+    }
 
     loop {
         terminal.draw(|frame| {
@@ -78,39 +76,21 @@ async fn run_app<B: ratatui::backend::Backend>(
 }
 
 fn dispatch_downloads(app: &mut App) {
-    let config = app.config.clone();
-    let tx = app.event_tx.clone();
-
-    // If there's a raw input (URL, search string, CSV path), hand it directly to sldl
-    if let Some(ref input) = app.raw_input {
-        let input = input.clone();
-        tokio::spawn(async move {
-            if let Err(e) = run_raw(&input, &config, &tx).await {
-                let _ = tx.send(crate::slsk::DownloadEvent::StatusChanged {
-                    item_id: 0,
-                    status: crate::slsk::DownloadStatus::Failed { reason: e.to_string() },
-                }).await;
-            }
-        });
-        return;
-    }
-
-    // CSV-sourced tracks: one sldl process per entry
-    let aggregation = app.config.defaults.aggregation;
-    let tasks: Vec<RunnerTask> = app.queue.iter().zip(app.tracks.iter())
-        .map(|(entry, track)| {
-            use crate::config::Aggregation;
-            let album_mode = matches!(aggregation, Aggregation::Album | Aggregation::Artist);
-            let term = match aggregation {
-                Aggregation::Song => search_term(&track.artist, &track.title),
-                Aggregation::Album | Aggregation::Artist => {
-                    let album = track.album.as_deref().unwrap_or(&track.title);
-                    search_term(&track.artist, album)
-                }
-            };
-            RunnerTask { id: entry.id, input: term, album_mode, output_path: None }
+    let tasks: Vec<RunnerTask> = app.queue.iter()
+        .filter(|e| matches!(e.status, crate::slsk::DownloadStatus::Queued))
+        .map(|entry| RunnerTask {
+            id: entry.id,
+            input: entry.input.clone(),
+            album_mode: entry.album_mode,
+            output_path: None,
         })
         .collect();
+
+    if tasks.is_empty() {
+        app.status_message = Some("nothing queued".into());
+        app.is_running = false;
+        return;
+    }
 
     let config = app.config.clone();
     let tx = app.event_tx.clone();

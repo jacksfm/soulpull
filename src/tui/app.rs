@@ -5,25 +5,34 @@ use crate::config::Config;
 use crate::sources::Track;
 use crate::slsk::{DownloadEvent, DownloadStatus};
 
-/// Which TUI panel is currently active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveView {
-    /// First-run setup: no credentials configured yet
     Setup,
     Queue,
     Config,
     Summary,
 }
 
-/// One entry in the download queue (track or album).
+/// Whether the queue view is in normal mode or accepting text input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputMode {
+    Normal,
+    /// User is typing in the add-item bar
+    Adding,
+}
+
+/// One entry in the download queue.
 #[derive(Debug, Clone)]
 pub struct QueueEntry {
     pub id: usize,
+    /// Display label shown in the queue list
     pub label: String,
+    /// The raw string passed to sldl (search term, URL, or CSV path)
+    pub input: String,
+    pub album_mode: bool,
     pub status: DownloadStatus,
 }
 
-/// Fields being edited in the setup view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SetupField {
     Username,
@@ -35,12 +44,12 @@ pub enum SetupField {
 pub struct App {
     pub config: Config,
     pub config_path: PathBuf,
-    pub tracks: Vec<Track>,
-    /// Raw input passed straight to sldl (URL, search string, etc.)
-    pub raw_input: Option<String>,
     pub queue: Vec<QueueEntry>,
     pub selected_index: usize,
     pub active_view: ActiveView,
+    pub input_mode: InputMode,
+    /// Text currently being typed in the add bar
+    pub input_buffer: String,
     pub should_quit: bool,
     pub config_editor_content: String,
     pub config_save_message: Option<String>,
@@ -52,7 +61,10 @@ pub struct App {
     pub is_running: bool,
     pub log_lines: Vec<String>,
 
-    // Setup view state
+    // counter for assigning unique IDs to queue entries
+    next_id: usize,
+
+    // setup view state
     pub setup_field: SetupField,
     pub setup_username: String,
     pub setup_password: String,
@@ -62,16 +74,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(config: Config, config_path: PathBuf, tracks: Vec<Track>, raw_input: Option<String>) -> Self {
+    pub fn new(config: Config, config_path: PathBuf) -> Self {
         let (event_tx, event_rx) = mpsc::channel(512);
-
         let needs_setup = config.soulseek.username.is_empty() || config.soulseek.password.is_empty();
         let active_view = if needs_setup { ActiveView::Setup } else { ActiveView::Queue };
-
-        let queue = build_queue(&tracks, raw_input.as_deref());
         let config_editor_content = toml::to_string_pretty(&config).unwrap_or_default();
 
-        // Pre-fill setup fields from existing config
         let setup_username = config.soulseek.username.clone();
         let setup_password = config.soulseek.password.clone();
         let setup_sldl_path = config.soulseek.sldl_path.clone();
@@ -80,11 +88,11 @@ impl App {
         Self {
             config,
             config_path,
-            tracks,
-            raw_input,
-            queue,
+            queue: Vec::new(),
             selected_index: 0,
             active_view,
+            input_mode: InputMode::Normal,
+            input_buffer: String::new(),
             should_quit: false,
             config_editor_content,
             config_save_message: None,
@@ -93,6 +101,7 @@ impl App {
             status_message: None,
             is_running: false,
             log_lines: Vec::new(),
+            next_id: 0,
             setup_field: SetupField::Username,
             setup_username,
             setup_password,
@@ -102,7 +111,87 @@ impl App {
         }
     }
 
-    /// Apply setup fields into config and save to disk.
+    /// Add a raw input string to the queue.
+    /// If it's a CSV path, expand it into individual track entries.
+    /// Otherwise add it as a single entry (search string, URL, etc.)
+    pub fn add_input(&mut self, raw: String) {
+        let raw = raw.trim().to_string();
+        if raw.is_empty() {
+            return;
+        }
+
+        let path = PathBuf::from(&raw);
+        if path.extension().map_or(false, |e| e.eq_ignore_ascii_case("csv")) && path.exists() {
+            match crate::sources::csv::parse_csv(&path) {
+                Ok(tracks) => {
+                    for track in tracks {
+                        self.add_track_entry(&track);
+                    }
+                    self.status_message = Some(format!("loaded csv: {}", path.display()));
+                }
+                Err(e) => {
+                    self.status_message = Some(format!("csv error: {e}"));
+                }
+            }
+        } else {
+            // Search string, URL, or soulseek link — add as-is
+            let album_mode = matches!(
+                self.config.defaults.aggregation,
+                crate::config::Aggregation::Album | crate::config::Aggregation::Artist
+            );
+            let id = self.next_id;
+            self.next_id += 1;
+            self.queue.push(QueueEntry {
+                id,
+                label: raw.clone(),
+                input: raw,
+                album_mode,
+                status: DownloadStatus::Queued,
+            });
+        }
+    }
+
+    fn add_track_entry(&mut self, track: &Track) {
+        use crate::config::Aggregation;
+        let album_mode = matches!(
+            self.config.defaults.aggregation,
+            Aggregation::Album | Aggregation::Artist
+        );
+        let input = match self.config.defaults.aggregation {
+            Aggregation::Song => format!("{} - {}", track.artist, track.title),
+            Aggregation::Album | Aggregation::Artist => {
+                let album = track.album.as_deref().unwrap_or(&track.title);
+                format!("{} - {}", track.artist, album)
+            }
+        };
+        let label = format!(
+            "{} — {}{}",
+            track.artist,
+            track.title,
+            track.album.as_deref().map(|a| format!(" ({})", a)).unwrap_or_default()
+        );
+        let id = self.next_id;
+        self.next_id += 1;
+        self.queue.push(QueueEntry {
+            id,
+            label,
+            input,
+            album_mode,
+            status: DownloadStatus::Queued,
+        });
+    }
+
+    /// Delete the currently selected queue entry (only if not running).
+    pub fn delete_selected(&mut self) {
+        if self.is_running || self.queue.is_empty() {
+            return;
+        }
+        self.queue.remove(self.selected_index);
+        if self.selected_index > 0 && self.selected_index >= self.queue.len() {
+            self.selected_index = self.queue.len().saturating_sub(1);
+        }
+    }
+
     pub fn commit_setup(&mut self) -> anyhow::Result<()> {
         self.config.soulseek.username = self.setup_username.clone();
         self.config.soulseek.password = self.setup_password.clone();
@@ -113,25 +202,22 @@ impl App {
         Ok(())
     }
 
-    /// Save the current config editor content to disk.
     pub fn save_config_editor(&mut self) {
         match toml::from_str::<Config>(&self.config_editor_content) {
             Ok(parsed) => {
                 self.config = parsed;
                 match self.config.save(&self.config_path) {
                     Ok(()) => {
-                        self.config_save_message = Some(format!(
-                            "Saved to {}",
-                            self.config_path.display()
-                        ));
+                        self.config_save_message =
+                            Some(format!("saved to {}", self.config_path.display()));
                     }
                     Err(e) => {
-                        self.config_save_message = Some(format!("Save failed: {e}"));
+                        self.config_save_message = Some(format!("save failed: {e}"));
                     }
                 }
             }
             Err(e) => {
-                self.config_save_message = Some(format!("TOML parse error: {e}"));
+                self.config_save_message = Some(format!("toml error: {e}"));
             }
         }
     }
@@ -151,11 +237,12 @@ impl App {
                     }
                 }
                 DownloadEvent::TrackDiscovered { item_id, label } => {
-                    // sldl told us about a track we didn't know about (e.g. from a URL input)
                     if !self.queue.iter().any(|e| e.id == item_id) {
                         self.queue.push(QueueEntry {
                             id: item_id,
-                            label,
+                            label: label.clone(),
+                            input: label,
+                            album_mode: false,
                             status: DownloadStatus::Queued,
                         });
                     }
@@ -190,34 +277,6 @@ impl App {
             }
         }
         counts
-    }
-}
-
-fn build_queue(tracks: &[Track], raw_input: Option<&str>) -> Vec<QueueEntry> {
-    if !tracks.is_empty() {
-        tracks
-            .iter()
-            .enumerate()
-            .map(|(i, t)| QueueEntry {
-                id: i,
-                label: format!(
-                    "{} — {}{}",
-                    t.artist,
-                    t.title,
-                    t.album.as_deref().map(|a| format!(" ({})", a)).unwrap_or_default()
-                ),
-                status: DownloadStatus::Queued,
-            })
-            .collect()
-    } else if let Some(input) = raw_input {
-        // Single entry for raw input — queue will be expanded by track_list events
-        vec![QueueEntry {
-            id: 0,
-            label: input.to_string(),
-            status: DownloadStatus::Queued,
-        }]
-    } else {
-        Vec::new()
     }
 }
 

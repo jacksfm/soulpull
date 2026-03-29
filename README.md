@@ -12,8 +12,6 @@
 > a terminal-based music acquisition tool for the soulseek peer-to-peer network.
 > give it a list. get your music. no gui required.
 
----
-
 ## what it does
 
 soulpull takes a list of music you want and downloads it from soulseek — all inside a clean, real-time terminal UI. point it at a CSV, a spotify playlist, a youtube playlist, a search string, whatever. configure your format preferences once, press `r`, and walk away.
@@ -25,7 +23,6 @@ Massive Attack,Teardrop,Mezzanine,330
 Portishead,Glory Box,Dummy,342
 ```
 
----
 
 ## features
 
@@ -42,7 +39,6 @@ Portishead,Glory Box,Dummy,342
 
 > **powered by [sldl](https://github.com/fiso64/slsk-batchdl)** under the hood for the soulseek protocol layer. native protocol implementation is on the roadmap.
 
----
 
 ## installation
 
@@ -91,7 +87,6 @@ cargo build --release --target aarch64-apple-darwin
 cargo build --release --target x86_64-pc-windows-msvc
 ```
 
----
 
 ## configuration
 
@@ -134,7 +129,6 @@ search_timeout_ms = 6000
 max_stale_time_ms = 30000
 ```
 
----
 
 ## usage
 
@@ -177,7 +171,6 @@ The Knife,Silent Shout,,
 
 `album` and `length` (seconds) are optional. rows with no title are treated as album downloads.
 
----
 
 ## keybinds
 
@@ -206,8 +199,6 @@ The Knife,Silent Shout,,
 | `space` | toggle password visibility |
 | `esc` | skip for now |
 
----
-
 ## status indicators
 
 ```
@@ -218,8 +209,6 @@ The Knife,Silent Shout,,
 ~  settled      downloaded at lower quality than preferred  [MP3]
 ✗  failed       nothing found, or transfer died
 ```
-
----
 
 ## views
 
@@ -256,7 +245,6 @@ press `s` anytime to see the post-run breakdown.
 ### config editor
 press `c` to edit your `soulpull.toml` inline. `ctrl+s` validates and saves. shows a green confirmation or a red parse error if your toml is broken.
 
----
 
 ## architecture
 
@@ -283,8 +271,6 @@ src/
         └── config.rs    inline toml editor with ctrl+s save
 ```
 
----
-
 ## roadmap
 
 - [ ] native soulseek protocol implementation (no sldl dependency)
@@ -294,7 +280,6 @@ src/
 - [ ] `--dry-run` flag — print what would be downloaded without transferring
 - [ ] scroll in config editor and queue view
 
----
 
 ## credits
 
@@ -302,7 +287,6 @@ src/
 - [ratatui](https://ratatui.rs) — terminal UI framework
 - [musicbrainz](https://musicbrainz.org) — open music metadata
 
----
 
 ## license
 

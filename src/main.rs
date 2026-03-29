@@ -21,23 +21,28 @@ async fn main() -> Result<()> {
         .with_ansi(false)
         .init();
 
-    let config_path = config::default_config_path();
+    let config_path = config::find_config_path();
     let cfg = if config_path.exists() {
         config::Config::load(&config_path)?
     } else {
-        tracing::info!("No config file at {:?}, using defaults", config_path);
+        tracing::info!("No config file found, will write to {:?} on save", config_path);
         config::Config::default()
     };
 
-    // Optional CSV path as first positional argument
+    // Optional input as first positional argument:
+    // - a CSV file path  → parsed into tracks
+    // - anything else    → passed straight to sldl as-is (URL, search string, etc.)
     let args: Vec<String> = std::env::args().collect();
-    let csv_path: Option<PathBuf> = args.get(1).map(PathBuf::from);
+    let input: Option<String> = args.get(1).cloned();
 
-    let tracks = if let Some(path) = csv_path {
-        sources::csv::parse_csv(&path)?
-    } else {
-        Vec::new()
+    let (tracks, raw_input) = match input {
+        Some(ref s) if PathBuf::from(s).extension().map_or(false, |e| e == "csv") => {
+            let path = PathBuf::from(s);
+            (sources::csv::parse_csv(&path)?, None)
+        }
+        Some(s) => (Vec::new(), Some(s)),
+        None => (Vec::new(), None),
     };
 
-    tui::run(cfg, tracks).await
+    tui::run(cfg, config_path, tracks, raw_input).await
 }

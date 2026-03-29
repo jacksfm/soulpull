@@ -227,10 +227,51 @@ impl Default for Config {
     }
 }
 
-/// Platform-appropriate config file location.
+/// Find the config file using portable-first lookup order:
+///   1. `soulpull.toml` next to the running executable
+///   2. `soulpull.toml` in the current working directory
+///   3. Platform config dir (AppData / ~/.config / ~/Library)
+///
+/// Returns the path of the first one that exists, or the exe-sibling path
+/// as the canonical location for writing a new config.
+pub fn find_config_path() -> PathBuf {
+    // 1. Next to the executable
+    if let Ok(exe) = std::env::current_exe() {
+        let sibling = exe.with_file_name("soulpull.toml");
+        if sibling.exists() {
+            return sibling;
+        }
+        // Remember this as the write target even if it doesn't exist yet
+        let exe_sibling = sibling;
+
+        // 2. Current working directory
+        if let Ok(cwd) = std::env::current_dir() {
+            let cwd_cfg = cwd.join("soulpull.toml");
+            if cwd_cfg.exists() {
+                return cwd_cfg;
+            }
+        }
+
+        // 3. Platform config dir
+        if let Some(config_dir) = dirs::config_dir() {
+            let platform_cfg = config_dir.join("soulpull").join("config.toml");
+            if platform_cfg.exists() {
+                return platform_cfg;
+            }
+        }
+
+        // Nothing found — default write location is next to the exe
+        exe_sibling
+    } else {
+        // Can't determine exe path; fall back to cwd
+        PathBuf::from("soulpull.toml")
+    }
+}
+
+/// The canonical path to write a new config to (exe-sibling, or cwd fallback).
 pub fn default_config_path() -> PathBuf {
-    if let Some(config_dir) = dirs::config_dir() {
-        config_dir.join("soulpull").join("config.toml")
+    if let Ok(exe) = std::env::current_exe() {
+        exe.with_file_name("soulpull.toml")
     } else {
         PathBuf::from("soulpull.toml")
     }

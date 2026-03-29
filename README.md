@@ -45,11 +45,13 @@ soulpull handles the rest.
 
 ## installation
 
-### prerequisites
+### download a binary (no Rust required)
 
-- [Rust](https://rustup.rs/) (stable)
-- [sldl](https://github.com/fiso64/slsk-batchdl/releases) — must be on your PATH or configured via `sldl_path`
-- A Soulseek account
+Grab the latest release from the [releases page](https://github.com/jacksfm/soulpull/releases).
+
+You also need [sldl](https://github.com/fiso64/slsk-batchdl/releases) — place `sldl.exe` next to `soulpull.exe`, or anywhere on your PATH.
+
+That's it. Run `soulpull` and a setup screen will appear on first run to enter your Soulseek credentials. Your config is saved as `soulpull.toml` in the same folder as the binary.
 
 ### build from source
 
@@ -77,25 +79,14 @@ cargo build --release --target x86_64-pc-windows-gnu
 
 ## configuration
 
-soulpull looks for its config at:
+On first run with no config, soulpull shows a setup screen where you enter your credentials. The config is then saved as `soulpull.toml` **next to the binary** — portable, no AppData hunting.
 
-| Platform | Path |
-|----------|------|
-| Windows  | `%APPDATA%\soulpull\config.toml` |
-| macOS    | `~/Library/Application Support/soulpull/config.toml` |
-| Linux    | `~/.config/soulpull/config.toml` |
+Config lookup order:
+1. `soulpull.toml` next to the executable ← preferred, portable
+2. `soulpull.toml` in the current working directory
+3. Platform config dir (`%APPDATA%\soulpull\`, `~/.config/soulpull/`, etc.)
 
-Copy the example config to get started:
-
-```bash
-# windows
-mkdir %APPDATA%\soulpull
-copy config.example.toml %APPDATA%\soulpull\config.toml
-
-# unix
-mkdir -p ~/.config/soulpull
-cp config.example.toml ~/.config/soulpull/config.toml
-```
+Press `c` in the queue view to open the inline editor. **Ctrl+S** saves to disk.
 
 ### full config reference
 
@@ -135,11 +126,30 @@ max_stale_time_ms = 30000
 
 ## usage
 
+soulpull accepts anything sldl accepts as input:
+
 ```bash
-# open the TUI with a CSV input file
+# CSV file
 soulpull my-list.csv
 
-# open the TUI with no input (add entries manually later)
+# Search string (album mode)
+soulpull "Daft Punk - Random Access Memory"
+
+# Spotify playlist or album
+soulpull https://open.spotify.com/playlist/xxxxx
+soulpull https://open.spotify.com/album/xxxxx
+
+# YouTube playlist
+soulpull https://www.youtube.com/playlist?list=xxxxx
+
+# MusicBrainz release, release group, or collection
+soulpull https://musicbrainz.org/release/xxxxx
+soulpull https://musicbrainz.org/release-group/xxxxx
+
+# Direct Soulseek link
+soulpull slsk://username/path/to/folder/
+
+# No input — opens TUI, use config view to set up
 soulpull
 ```
 
@@ -151,21 +161,36 @@ Daft Punk,Get Lucky,Random Access Memory,248
 Boards of Canada,Roygbiv,Music Has the Right to Children,173
 ```
 
-`album` and `length` (seconds) are optional but improve MusicBrainz resolution accuracy.
+`album` and `length` (seconds) are optional. Rows without a title are treated as album downloads.
 
 ---
 
 ## TUI keybinds
 
+### queue view
 | key | action |
 |-----|--------|
 | `j` / `↓` | move down |
 | `k` / `↑` | move up |
 | `r` / `Enter` | start downloads |
-| `c` | open config view |
+| `c` | open config editor |
 | `s` | open summary view |
 | `q` / `Esc` | quit |
 | `Ctrl+C` | force quit |
+
+### config editor
+| key | action |
+|-----|--------|
+| `Ctrl+S` | save to disk |
+| `Esc` | back to queue |
+
+### setup screen (first run)
+| key | action |
+|-----|--------|
+| `Tab` | next field |
+| `Enter` | save and continue |
+| `Space` | toggle password visibility |
+| `Esc` | skip (can configure later) |
 
 ---
 

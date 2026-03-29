@@ -31,6 +31,8 @@ impl DownloadStatus {
 #[derive(Debug, Clone)]
 pub enum DownloadEvent {
     StatusChanged { item_id: usize, status: DownloadStatus },
+    /// sldl reported a track we didn't know about yet (e.g. from a URL/playlist input)
+    TrackDiscovered { item_id: usize, label: String },
     /// A human-readable log line (errors, warnings from sldl stderr)
     Log { item_id: usize, message: String },
 }
@@ -72,4 +74,19 @@ pub struct ChosenFile {
     pub extension: Option<String>,
     pub bit_rate: Option<u32>,
     pub sample_rate: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackListData {
+    pub tracks: Vec<TrackListEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackListEntry {
+    pub index: usize,
+    pub artist: Option<String>,
+    pub title: Option<String>,
+    pub album: Option<String>,
 }

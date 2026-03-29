@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            artifact: soulpull.exe
+
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact: soulpull-linux-x86_64
+
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact: soulpull-linux-aarch64
+
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: soulpull-macos-x86_64
+
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: soulpull-macos-aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl tools (Linux)
+        if: contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          # aarch64 cross-compiler
+          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-musl" ]]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          fi
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename artifact (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cp target/${{ matrix.target }}/release/soulpull ${{ matrix.artifact }}
+          chmod +x ${{ matrix.artifact }}
+
+      - name: Rename artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: Copy-Item "target\${{ matrix.target }}\release\soulpull.exe" "${{ matrix.artifact }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            Download the binary for your platform below. No Rust installation required.
+
+            **Also required:** [sldl](https://github.com/fiso64/slsk-batchdl/releases) — place `sldl.exe` (or `sldl`) next to `soulpull`, or anywhere on your PATH.
+
+            ### Quick start
+
+            1. Download `soulpull` for your platform
+            2. Download `sldl` from its releases page
+            3. Run `soulpull` — a setup screen will appear on first run to enter your Soulseek credentials
+            4. Your config is saved as `soulpull.toml` next to the binary
+
+            ```
+            soulpull my-list.csv        # download from a CSV
+            soulpull "Artist - Album"   # download by search string
+            soulpull https://open.spotify.com/playlist/...   # Spotify playlist
+            ```

@@ -12,17 +12,20 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(3),    // editor
-            Constraint::Length(2), // footer
+            Constraint::Length(2), // save status / footer
         ])
         .split(area);
 
     render_editor(frame, chunks[0], app);
-    render_footer(frame, chunks[1]);
+    render_footer(frame, chunks[1], app);
 }
 
 fn render_editor(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
-        .title(" Config Editor (TOML) — Esc to return, Enter for newline ")
+        .title(format!(
+            " Config — {} — Ctrl+S to save · Esc to return ",
+            app.config_path.display()
+        ))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Yellow));
 
@@ -34,10 +37,17 @@ fn render_editor(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(para, area);
 }
 
-fn render_footer(frame: &mut Frame, area: Rect) {
-    let para = Paragraph::new(
-        " Note: config edits are not yet persisted. Edit config.toml directly for now.",
-    )
-    .style(Style::default().fg(Color::DarkGray));
+fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
+    let msg = app.config_save_message.as_deref().unwrap_or(
+        " Ctrl+S save · Esc back to queue"
+    );
+    let color = if app.config_save_message.as_deref().map_or(false, |m| m.starts_with("Save") || m.starts_with("Saved")) {
+        Color::Green
+    } else if app.config_save_message.as_deref().map_or(false, |m| m.contains("error") || m.contains("failed")) {
+        Color::Red
+    } else {
+        Color::DarkGray
+    };
+    let para = Paragraph::new(msg).style(Style::default().fg(color));
     frame.render_widget(para, area);
 }

@@ -1,0 +1,28 @@
+[defaults]
+aggregation = "album"            # song | album | artist
+release_preference = "original"  # original | latest | ask
+output_path = "~/Music/soulpull"
+max_concurrent_downloads = 2     # how many sldl processes to run at once
+
+[format]
+# sldl will try formats in this order; first match wins
+preferred = ["flac", "mp3"]
+# also accepted (but not preferred) — empty means same as preferred
+fallback = []
+# preferred quality conditions (sldl tries hardest to satisfy these)
+preferred_min_samplerate = 96000   # Hz — prefer hi-res FLAC
+preferred_min_bitrate = 320        # kbps — prefer 320kbps MP3 if no FLAC
+# hard minimum quality (necessary conditions — rejects files below these)
+min_bitrate = 128                  # kbps
+
+[filters]
+# MusicBrainz release types to skip when resolving albums
+exclude_release_types = ["live", "remix", "anniversary", "compilation"]
+
+[soulseek]
+username = ""                      # your Soulseek username
+password = ""                      # your Soulseek password
+sldl_path = "sldl"                 # path to sldl binary, or just "sldl" if on PATH
+listen_port = 49998
+search_timeout_ms = 6000
+max_stale_time_ms = 30000

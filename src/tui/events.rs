@@ -1,11 +1,13 @@
 use anyhow::Result;
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::app::{ActiveView, App, SetupField};
 
 /// Returns `true` if the user pressed the run key and downloads should start.
 pub fn handle(app: &mut App, event: Event) -> Result<bool> {
     let Event::Key(key) = event else { return Ok(false) };
+    // Ignore key release and repeat — only act on press
+    if key.kind != KeyEventKind::Press { return Ok(false); }
 
     let run = match app.active_view {
         ActiveView::Setup   => { handle_setup(app, key); false }

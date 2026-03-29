@@ -9,14 +9,14 @@
 ╚═════╝░░╚════╝░░╚═════╝░╚══════╝╚═╝░░░░░░╚═════╝░╚══════╝╚══════╝
 ```
 
-> **A terminal-based music acquisition tool for the Soulseek peer-to-peer network.**
-> Give it a CSV. Get your music. No GUI required.
+> a terminal-based music acquisition tool for the soulseek peer-to-peer network.
+> give it a list. get your music. no gui required.
 
 ---
 
 ## what it does
 
-soulpull takes a list of music you want, figures out the best available files on Soulseek, and downloads them — all inside a clean, real-time terminal UI. configure your format preferences once, point it at a CSV, press `r`, and walk away.
+soulpull takes a list of music you want and downloads it from soulseek — all inside a clean, real-time terminal UI. point it at a CSV, a spotify playlist, a youtube playlist, a search string, whatever. configure your format preferences once, press `r`, and walk away.
 
 ```
 artist,title,album,length
@@ -25,68 +25,84 @@ Massive Attack,Teardrop,Mezzanine,330
 Portishead,Glory Box,Dummy,342
 ```
 
-soulpull handles the rest.
-
 ---
 
 ## features
 
 - **real-time TUI** — live download queue with per-track status, progress %, and format received
-- **format priority chain** — prefer FLAC hi-res, fall back to MP3 320, settle gracefully and report it
-- **aggregation modes** — download a single song, the full album, or an entire artist discography from one input line
-- **MusicBrainz resolution** — canonicalize artist/album metadata, filter out live albums, remixes, compilations
-- **sldl backend** — powered by [sldl](https://github.com/fiso64/slsk-batchdl) under the hood; no Soulseek daemon required
+- **flexible input** — CSV, spotify, youtube, musicbrainz URLs, search strings, direct soulseek links
+- **format preferences** — prefer flac hi-res, fall back to mp3 320, settle gracefully and report it
+- **aggregation modes** — download a single song, the full album, or an entire discography
 - **concurrent downloads** — configurable parallelism, all streaming progress back to the UI
-- **summary view** — post-run breakdown of done / settled (got lower quality than wanted) / failed with reasons
-- **inline config editor** — tweak your TOML without leaving the terminal
-- **single static binary** — no runtime dependencies, cross-compiles for Linux, macOS, Windows
+- **inline config editor** — edit and save your config without leaving the terminal
+- **first-run setup screen** — enter credentials on first launch, no config file editing required
+- **portable** — config lives next to the binary, no appdata/hidden folders
+- **summary view** — post-run breakdown: done / settled (got lower quality) / failed with reasons
+- **single static binary** — no runtime, no installer
+
+> **powered by [sldl](https://github.com/fiso64/slsk-batchdl)** under the hood for the soulseek protocol layer. native protocol implementation is on the roadmap.
 
 ---
 
 ## installation
 
-### download a binary (no Rust required)
+### option 1 — download a release (no rust required)
 
-Grab the latest release from the [releases page](https://github.com/jacksfm/soulpull/releases).
+1. grab the latest binary for your platform from the [releases page](https://github.com/jacksfm/soulpull/releases)
+2. grab [sldl](https://github.com/fiso64/slsk-batchdl/releases) and place `sldl.exe` (or `sldl`) **in the same folder** as `soulpull`, or anywhere on your PATH
+3. run `soulpull` — a setup screen appears on first launch to enter your soulseek credentials
+4. your config is saved as `soulpull.toml` right next to the binary
 
-You also need [sldl](https://github.com/fiso64/slsk-batchdl/releases) — place `sldl.exe` next to `soulpull.exe`, or anywhere on your PATH.
+that's it.
 
-That's it. Run `soulpull` and a setup screen will appear on first run to enter your Soulseek credentials. Your config is saved as `soulpull.toml` in the same folder as the binary.
+### option 2 — build from source
 
-### build from source
+you'll need [rust](https://rustup.rs) installed.
 
 ```bash
 git clone https://github.com/jacksfm/soulpull
 cd soulpull
 cargo build --release
-./target/release/soulpull
 ```
+
+the binary ends up at `target/release/soulpull` (or `soulpull.exe` on windows).
+
+to run directly without building first:
+
+```bash
+cargo run                          # open TUI with no input
+cargo run -- example.csv           # load a CSV
+cargo run -- "Artist - Album"      # search string
+cargo run -- https://open.spotify.com/album/...
+```
+
+sldl still needs to be available — either drop `sldl.exe` in the repo folder or put it on your PATH. the TUI, setup screen, and config editor all work without sldl. you only need it when you actually press `r` to start downloading.
 
 ### cross-compile targets
 
 ```bash
-# Linux x86_64
+# linux x86_64 (static musl)
 cargo build --release --target x86_64-unknown-linux-musl
 
-# macOS Apple Silicon
+# macos apple silicon
 cargo build --release --target aarch64-apple-darwin
 
-# Windows
-cargo build --release --target x86_64-pc-windows-gnu
+# windows
+cargo build --release --target x86_64-pc-windows-msvc
 ```
 
 ---
 
 ## configuration
 
-On first run with no config, soulpull shows a setup screen where you enter your credentials. The config is then saved as `soulpull.toml` **next to the binary** — portable, no AppData hunting.
+on first run with no config, soulpull shows a setup screen. fill in your credentials, hit enter, and you're in. the config saves as `soulpull.toml` next to the binary.
 
-Config lookup order:
-1. `soulpull.toml` next to the executable ← preferred, portable
+**config lookup order:**
+1. `soulpull.toml` next to the executable ← this is where it saves by default
 2. `soulpull.toml` in the current working directory
-3. Platform config dir (`%APPDATA%\soulpull\`, `~/.config/soulpull/`, etc.)
+3. platform config dir (`%APPDATA%\soulpull\`, `~/.config/soulpull/`, etc.)
 
-Press `c` in the queue view to open the inline editor. **Ctrl+S** saves to disk.
+press `c` in the queue view to open the inline editor. `ctrl+s` saves to disk.
 
 ### full config reference
 
@@ -95,28 +111,24 @@ Press `c` in the queue view to open the inline editor. **Ctrl+S** saves to disk.
 aggregation = "album"            # song | album | artist
 release_preference = "original"  # original | latest | ask
 output_path = "~/Music/soulpull"
-max_concurrent_downloads = 2
+max_concurrent_downloads = 2     # how many downloads run at once
 
 [format]
-# sldl tries these in order — first match wins
-preferred = ["flac", "mp3"]
-fallback = []
+preferred = ["flac", "mp3"]      # try these formats, in order
+fallback = []                    # also accepted, but not preferred
 
-# preferred quality (sldl works hardest to satisfy these)
-preferred_min_samplerate = 96000   # Hz — prefer hi-res FLAC
-preferred_min_bitrate = 320        # kbps — prefer 320kbps if no FLAC
-
-# hard floor — files below these are rejected outright
-min_bitrate = 128
+preferred_min_samplerate = 96000 # prefer hi-res flac (hz)
+preferred_min_bitrate = 320      # prefer 320kbps if no flac (kbps)
+min_bitrate = 128                # hard floor — reject anything below this
 
 [filters]
-# skip these MusicBrainz release types when resolving albums
+# skip these release types when resolving via musicbrainz
 exclude_release_types = ["live", "remix", "anniversary", "compilation"]
 
 [soulseek]
 username = "your_username"
 password = "your_password"
-sldl_path = "sldl"               # or full path to sldl binary
+sldl_path = "sldl"               # "sldl" if on PATH, otherwise full path to the binary
 listen_port = 49998
 search_timeout_ms = 6000
 max_stale_time_ms = 30000
@@ -126,83 +138,85 @@ max_stale_time_ms = 30000
 
 ## usage
 
-soulpull accepts anything sldl accepts as input:
+soulpull accepts anything sldl accepts — it passes your input straight through:
 
 ```bash
-# CSV file
+# csv file
 soulpull my-list.csv
 
-# Search string (album mode)
+# search string — wraps in album mode automatically
 soulpull "Daft Punk - Random Access Memory"
 
-# Spotify playlist or album
+# spotify playlist or album
 soulpull https://open.spotify.com/playlist/xxxxx
 soulpull https://open.spotify.com/album/xxxxx
 
-# YouTube playlist
+# youtube playlist
 soulpull https://www.youtube.com/playlist?list=xxxxx
 
-# MusicBrainz release, release group, or collection
+# musicbrainz release, release group, or collection
 soulpull https://musicbrainz.org/release/xxxxx
 soulpull https://musicbrainz.org/release-group/xxxxx
+soulpull https://musicbrainz.org/collection/xxxxx
 
-# Direct Soulseek link
+# direct soulseek link
 soulpull slsk://username/path/to/folder/
 
-# No input — opens TUI, use config view to set up
+# no input — opens TUI, configure from the setup/config screen
 soulpull
 ```
 
-### CSV format
+### csv format
 
 ```csv
 artist,title,album,length
 Daft Punk,Get Lucky,Random Access Memory,248
 Boards of Canada,Roygbiv,Music Has the Right to Children,173
+The Knife,Silent Shout,,
 ```
 
-`album` and `length` (seconds) are optional. Rows without a title are treated as album downloads.
+`album` and `length` (seconds) are optional. rows with no title are treated as album downloads.
 
 ---
 
-## TUI keybinds
+## keybinds
 
 ### queue view
 | key | action |
 |-----|--------|
 | `j` / `↓` | move down |
 | `k` / `↑` | move up |
-| `r` / `Enter` | start downloads |
+| `r` / `enter` | start downloads |
 | `c` | open config editor |
 | `s` | open summary view |
-| `q` / `Esc` | quit |
-| `Ctrl+C` | force quit |
+| `q` / `esc` | quit |
+| `ctrl+c` | force quit |
 
 ### config editor
 | key | action |
 |-----|--------|
-| `Ctrl+S` | save to disk |
-| `Esc` | back to queue |
+| `ctrl+s` | save to disk |
+| `esc` | back to queue (discards unsaved changes) |
 
 ### setup screen (first run)
 | key | action |
 |-----|--------|
-| `Tab` | next field |
-| `Enter` | save and continue |
-| `Space` | toggle password visibility |
-| `Esc` | skip (can configure later) |
+| `tab` | next field |
+| `enter` | save and continue |
+| `space` | toggle password visibility |
+| `esc` | skip for now |
 
 ---
 
 ## status indicators
 
 ```
-·  queued       — waiting to start
-?  searching    — sldl is searching Soulseek
-⇣  downloading  — transfer in progress  [xx%]
-✓  done         — downloaded at preferred quality  [FLAC]
-~  settled      — downloaded at lower quality than wanted  [MP3]
-✗  failed       — could not find or download
+·  queued       waiting to start
+?  searching    looking for matches on soulseek
+⇣  downloading  transfer in progress  [67%]
+✓  done         downloaded at preferred quality  [FLAC]
+~  settled      downloaded at lower quality than preferred  [MP3]
+✗  failed       nothing found, or transfer died
 ```
 
 ---
@@ -210,27 +224,27 @@ Boards of Canada,Roygbiv,Music Has the Right to Children,173
 ## views
 
 ### queue view
-the main screen. shows every track/album with its live status and progress. updates in real time as sldl streams progress events back.
+the main screen. every track/album with its live status and progress. updates in real time as sldl streams events back.
 
 ```
 ┌─ soulpull — Queue [j/k navigate | r run | c config | s summary | q quit] ──┐
-│ ✓  Daft Punk — Random Access Memory                              [FLAC]     │
-│ ⇣  Massive Attack — Mezzanine                                    [ 67%]     │
-│ ·  Portishead — Dummy                                                        │
-│ ✗  Unknown Artist — Ghost Track              [no results found]             │
+│▶ ✓  Daft Punk — Random Access Memory                              [FLAC]    │
+│  ⇣  Massive Attack — Mezzanine                                    [ 67%]    │
+│  ·  Portishead — Dummy                                                       │
+│  ✗  Unknown Artist — Ghost Track              [no results found]            │
 └─────────────────────────────────────────────────────────────────────────────┘
  ✓ 1 done  ~ 0 settled  ✗ 1 failed  · 1 queued  ⇣ 1 active
 ```
 
 ### summary view
-post-run breakdown. press `s` to switch to it anytime.
+press `s` anytime to see the post-run breakdown.
 
 ```
 ┌─ Results ───────────────────────────────────────────────────────────────────┐
-│  ✓ Done:       8                                                             │
-│  ~ Settled:    2                                                             │
-│  ✗ Failed:     1                                                             │
-│    Total:      11                                                            │
+│  ✓ done:       8                                                             │
+│  ~ settled:    2                                                             │
+│  ✗ failed:     1                                                             │
+│    total:      11                                                            │
 └─────────────────────────────────────────────────────────────────────────────┘
 ┌─ Per-Item Breakdown ────────────────────────────────────────────────────────┐
 │ ✓  Daft Punk — Random Access Memory [FLAC]                                  │
@@ -239,57 +253,57 @@ post-run breakdown. press `s` to switch to it anytime.
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### config editor
+press `c` to edit your `soulpull.toml` inline. `ctrl+s` validates and saves. shows a green confirmation or a red parse error if your toml is broken.
+
 ---
 
 ## architecture
 
 ```
-soulpull/
-├── src/
-│   ├── main.rs              entry point, CLI args, log → file
-│   ├── config.rs            TOML config loading and structs
-│   ├── sources/
-│   │   └── csv.rs           CSV → Vec<Track>
-│   ├── resolver/
-│   │   ├── musicbrainz.rs   MusicBrainz API client (rate-limited)
-│   │   └── aggregator.rs    expands tracks into song / album / discography
-│   ├── slsk/
-│   │   ├── mod.rs           DownloadStatus, DownloadEvent, sldl JSON shapes
-│   │   └── runner.rs        builds sldl commands, streams NDJSON → TUI events
-│   └── tui/
-│       ├── mod.rs           terminal setup, event loop
-│       ├── app.rs           central app state
-│       ├── events.rs        keybind dispatch
-│       └── views/
-│           ├── queue.rs     live download queue
-│           ├── summary.rs   post-run breakdown
-│           └── config.rs    inline TOML editor
+src/
+├── main.rs              entry point — cli args, log-to-file, hands off to tui
+├── config.rs            toml config, portable path discovery, save/load
+├── sources/
+│   └── csv.rs           csv → vec<track>
+├── resolver/
+│   ├── musicbrainz.rs   musicbrainz api client (rate-limited, 1 req/s)
+│   └── aggregator.rs    expand a track into song / album / discography
+├── slsk/
+│   ├── mod.rs           downloadstatus, downloadevent, sldl ndjson shapes
+│   └── runner.rs        build sldl commands · spawn subprocess · parse ndjson → tui
+└── tui/
+    ├── mod.rs           terminal setup/teardown · 50ms event loop · dispatch downloads
+    ├── app.rs           all app state — queue, config, setup fields, event channel
+    ├── events.rs        keybind dispatch (press-only, no double-fire on windows)
+    └── views/
+        ├── setup.rs     first-run credential setup screen
+        ├── queue.rs     live download queue
+        ├── summary.rs   post-run breakdown
+        └── config.rs    inline toml editor with ctrl+s save
 ```
-
-soulpull delegates all Soulseek protocol work to [sldl](https://github.com/fiso64/slsk-batchdl). it builds the right `sldl` invocation from your config, spawns it as a subprocess, and parses its `--progress-json` NDJSON output stream to drive the TUI. no Soulseek daemon, no separate server process.
 
 ---
 
 ## roadmap
 
-- [ ] MusicBrainz resolution wired to download dispatch (canonical album lookup before searching)
-- [ ] Artist discography mode fully wired
-- [ ] Spotify / YouTube playlist as input source
-- [ ] Native Soulseek protocol implementation (replace sldl subprocess)
-- [ ] Config editor persists changes to disk
-- [ ] `--dry-run` mode (print what would be downloaded, no transfers)
-- [ ] Skip-existing logic (don't re-download files already in output_path)
+- [ ] native soulseek protocol implementation (no sldl dependency)
+- [ ] musicbrainz resolution wired to download dispatch
+- [ ] artist discography mode
+- [ ] skip-existing logic (don't re-download files already in output folder)
+- [ ] `--dry-run` flag — print what would be downloaded without transferring
+- [ ] scroll in config editor and queue view
 
 ---
 
 ## credits
 
-- [sldl](https://github.com/fiso64/slsk-batchdl) by fiso64 — the actual Soulseek download engine
+- [sldl](https://github.com/fiso64/slsk-batchdl) by fiso64 — soulseek protocol and download engine
 - [ratatui](https://ratatui.rs) — terminal UI framework
-- [MusicBrainz](https://musicbrainz.org) — open music metadata database
+- [musicbrainz](https://musicbrainz.org) — open music metadata
 
 ---
 
 ## license
 
-MIT
+mit
